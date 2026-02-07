@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Dashboard | Trendy Threads</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100 text-gray-800">
+
+
+    <header class="bg-indigo-600 text-white py-5 shadow">
+        <div class="max-w-7xl mx-auto px-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold">Trendy Threads – Dashboard</h1>
+            <div class="space-x-4">
+                <a href="index.html" class="bg-white text-indigo-600 px-3 py-2 rounded font-semibold">Home</a>
+                <a href="products.html" class="bg-yellow-400 text-black px-3 py-2 rounded font-semibold">Products</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-6 space-y-8">
+
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-white p-5 rounded shadow">
+                <h3 class="text-gray-600">Pending Orders</h3>
+                <p id="pendingCount" class="text-3xl font-bold text-red-600">0</p>
+            </div>
+            <div class="bg-white p-5 rounded shadow">
+                <h3 class="text-gray-600">Completed Orders</h3>
+                <p id="completedCount" class="text-3xl font-bold text-green-600">0</p>
+            </div>
+            <div class="bg-white p-5 rounded shadow">
+                <h3 class="text-gray-600">Low Stock Products</h3>
+                <p id="lowStockCount" class="text-3xl font-bold text-yellow-600">0</p>
+            </div>
+        </div>
+
+
+        <section class="bg-white p-5 rounded shadow">
+            <h2 class="text-xl font-bold mb-4">Products Sold & Revenue</h2>
+            <table class="w-full border">
+                <thead class="bg-gray-200">
+                    <tr>
+                        <th class="p-2 border">Product</th>
+                        <th class="p-2 border">Units Sold</th>
+                        <th class="p-2 border">Revenue (₹)</th>
+                    </tr>
+                </thead>
+                <tbody id="productStats"></tbody>
+            </table>
+        </section>
+
+
+        <section class="bg-white p-5 rounded shadow">
+            <h2 class="text-xl font-bold mb-4 text-red-600">Low Stock Alerts</h2>
+            <ul id="lowStockList" class="list-disc pl-6"></ul>
+        </section>
+
+
+        <section class="bg-white p-5 rounded shadow">
+            <h2 class="text-xl font-bold mb-4 text-orange-600">Delayed Orders</h2>
+            <table class="w-full border">
+                <thead class="bg-gray-200">
+                    <tr>
+                        <th class="p-2 border">Order ID</th>
+                        <th class="p-2 border">Customer</th>
+                        <th class="p-2 border">Product</th>
+                        <th class="p-2 border">Days Delayed</th>
+                    </tr>
+                </thead>
+                <tbody id="delayedOrders"></tbody>
+            </table>
+        </section>
+
+
+        <section class="bg-white p-5 rounded shadow">
+            <h2 class="text-xl font-bold mb-4">Top Customers by Revenue</h2>
+            <table class="w-full border">
+                <thead class="bg-gray-200">
+                    <tr>
+                        <th class="p-2 border">Customer</th>
+                        <th class="p-2 border">Total Revenue (₹)</th>
+                    </tr>
+                </thead>
+                <tbody id="topCustomers"></tbody>
+            </table>
+        </section>
+
+    </main>
+
+
+    <script>
+        const PRODUCTS_API = "http://localhost:8080/products";
+        const ORDERS_API = "http://localhost:8080/orders";
+        const CUSTOMERS_API = "http://localhost:8080/customers";
+
+        Promise.all([
+            fetch(PRODUCTS_API).then(r => r.json()),
+            fetch(ORDERS_API).then(r => r.json()),
+            fetch(CUSTOMERS_API).then(r => r.json())
+        ]).then(([products, orders, customers]) => {
+
+
+            const pending = orders.filter(o => o.status === "Pending").length;
+            const completed = orders.filter(o => o.status === "Completed").length;
+            document.getElementById("pendingCount").textContent = pending;
+            document.getElementById("completedCount").textContent = completed;
+
+
+            const statsBody = document.getElementById("productStats");
+            products.forEach(p => {
+                const revenue = p.sold * p.price;
+                statsBody.innerHTML += `
+          <tr>
+            <td class="border p-2">${p.name}</td>
+            <td class="border p-2">${p.sold}</td>
+            <td class="border p-2">₹${revenue}</td>
+          </tr>
+        `;
+            });
+
+
+            const lowStock = products.filter(p => p.stock < 20);
+            document.getElementById("lowStockCount").textContent = lowStock.length;
+            const lowStockList = document.getElementById("lowStockList");
+            lowStock.forEach(p => {
+                lowStockList.innerHTML += `<li>${p.name} (Stock: ${p.stock})</li>`;
+            });
+
+
+            const today = new Date();
+            const delayedBody = document.getElementById("delayedOrders");
+
+            orders.forEach(o => {
+                const delivery = new Date(o.deliveryDate);
+                if (o.status === "Pending" && delivery < today) {
+                    const days = Math.floor((today - delivery) / (1000 * 60 * 60 * 24));
+                    const product = products.find(p => p.id === o.productId);
+                    const customer = customers.find(c => c.id === o.customerId);
+
+                    delayedBody.innerHTML += `
+            <tr>
+              <td class="border p-2">${o.orderId}</td>
+              <td class="border p-2">${customer.name}</td>
+              <td class="border p-2">${product.name}</td>
+              <td class="border p-2 text-red-600 font-bold">${days}</td>
+            </tr>
+          `;
+                }
+            });
+
+
+            const revenueMap = {};
+            orders.forEach(o => {
+                const product = products.find(p => p.id === o.productId);
+                const amount = product.price;
+                revenueMap[o.customerId] = (revenueMap[o.customerId] || 0) + amount;
+            });
+
+            const top = Object.entries(revenueMap)
+                .map(([cid, rev]) => ({
+                    customer: customers.find(c => c.id == cid).name,
+                    revenue: rev
+                }))
+                .sort((a, b) => b.revenue - a.revenue)
+                .slice(0, 3);
+
+            const topBody = document.getElementById("topCustomers");
+            top.forEach(c => {
+                topBody.innerHTML += `
+          <tr>
+            <td class="border p-2">${c.customer}</td>
+            <td class="border p-2">₹${c.revenue}</td>
+          </tr>
+        `;
+            });
+
+        });
+    </script>
+
+</body>
+
+</html>
